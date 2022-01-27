@@ -179,12 +179,14 @@ def predict_structure(
   ranking_confidences = {}
 
   # Run the models.
+  # zy: hereby, feature_dict saves the features in file features.pkl
   num_models = len(model_runners)
   for model_index, (model_name, model_runner) in enumerate(
       model_runners.items()):
     logging.info('Running model %s on %s', model_name, fasta_name)
     t_0 = time.time()
     model_random_seed = model_index + random_seed * num_models
+    # zy: in multimer, processed_feature_dict == feature_dict.
     processed_feature_dict = model_runner.process_features(
         feature_dict, random_seed=model_random_seed)
     timings[f'process_features_{model_name}'] = time.time() - t_0

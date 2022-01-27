@@ -464,6 +464,7 @@ class AlphaFold(hk.Module):
 
       if 'num_iter_recycling' in batch:
         # Training time: num_iter_recycling is in batch.
+        # zy: seemingly this should be manually added to the batch.
         # Value for each ensemble batch is the same, so arbitrarily taking 0-th.
         num_iter = batch['num_iter_recycling'][0]
 
@@ -483,6 +484,7 @@ class AlphaFold(hk.Module):
 
       prev, safe_key = hk.fori_loop(0, num_iter, recycle_body, (prev, safe_key))
     else:
+      # zy: recycle is not used at all
       prev = {}
 
     # Run extra iteration.

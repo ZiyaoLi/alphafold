@@ -112,6 +112,7 @@ class RunModel:
       self,
       raw_features: Union[tf.train.Example, features.FeatureDict],
       random_seed: int) -> features.FeatureDict:
+    # zy: if multimer mode is used this process is essentially ignored.
     """Processes features to prepare for feeding them into the model.
 
     Args:

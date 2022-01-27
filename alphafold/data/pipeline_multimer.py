@@ -42,6 +42,10 @@ class _FastaChain:
   description: str
 
 
+# zy: this function returns a dict as id: _FastaChain where the ids are single 
+#     alphanumeric chars. _FastaChain is the object of chains containing only
+#     data strings (see above). The orders of input chains (sequences) remain 
+#     the same as the input FASTA file.
 def _make_chain_id_map(*,
                        sequences: Sequence[str],
                        descriptions: Sequence[str],
@@ -69,13 +73,15 @@ def temp_fasta_file(fasta_str: str):
     yield fasta_file.name
 
 
+# zy: this function is simply used to support old feature dicts.
+#     some trivial things are done here to support the inputs.
 def convert_monomer_features(
     monomer_features: pipeline.FeatureDict,
     chain_id: str) -> pipeline.FeatureDict:
   """Reshapes and modifies monomer features for multimer models."""
   converted = {}
   converted['auth_chain_id'] = np.asarray(chain_id, dtype=np.object_)
-  unnecessary_leading_dim_feats = {
+  unnecessary_leading_dim_feats = {   # zy: previously they were strs & ints.
       'sequence', 'domain_name', 'num_alignments', 'seq_length'}
   for feature_name, feature in monomer_features.items():
     if feature_name in unnecessary_leading_dim_feats:
@@ -94,6 +100,8 @@ def convert_monomer_features(
   return converted
 
 
+# zy: this function is used only to encode entity_id. The motivation of doing 
+#     so instead of str() the int id (i.e. 1 -> '1') is to shorten the str id.
 def int_id_to_str_id(num: int) -> str:
   """Encodes a number as a string, using reverse spreadsheet style naming.
 
@@ -116,6 +124,7 @@ def int_id_to_str_id(num: int) -> str:
   return ''.join(output)
 
 
+# zy: generate chain features according to the (elaborated) chain ids.
 def add_assembly_features(
     all_chain_features: MutableMapping[str, pipeline.FeatureDict],
     ) -> MutableMapping[str, pipeline.FeatureDict]:
@@ -132,7 +141,10 @@ def add_assembly_features(
       heterodimer would have keys A_1 and B_1.
   """
   # Group the chains by sequence
-  seq_to_entity_id = {}
+  seq_to_entity_id = {}   # zy: directly get the entity_id from the seq str.
+                          #     identical seq strs will have same entity_id.
+                          #     This is the major difference between chain_id
+                          #     and entity_id.
   grouped_chains = collections.defaultdict(list)
   for chain_id, chain_features in all_chain_features.items():
     seq = str(chain_features['sequence'])
@@ -234,6 +246,9 @@ class DataPipeline:
         'msa_uniprot_accession_identifiers',
         'msa_species_identifiers',
     )
+    # zy: below keys are in valid_feats:
+    #     ['msa', 'msa_mask', 'deletion_matrix', 'deletion_matrix_int', 
+    #      'msa_uniprot_accession_identifiers', 'msa_species_identifiers']
     feats = {f'{k}_all_seq': v for k, v in all_seq_features.items()
              if k in valid_feats}
     return feats
@@ -245,8 +260,17 @@ class DataPipeline:
     """Runs alignment tools on the input sequences and creates features."""
     with open(input_fasta_path) as f:
       input_fasta_str = f.read()
+    # zy: the fasta file takes the form (multimer specifically)
+    # ------------
+    # >description1
+    # ABABABABAB
+    # >description2
+    # BABABABABA
+    # ...
+    # ------------
     input_seqs, input_descs = parsers.parse_fasta(input_fasta_str)
 
+    # zy: dump a file containing all chains in `chain_id_map.json`
     chain_id_map = _make_chain_id_map(sequences=input_seqs,
                                       descriptions=input_descs)
     chain_id_map_path = os.path.join(msa_output_dir, 'chain_id_map.json')
@@ -255,11 +279,14 @@ class DataPipeline:
                            for chain_id, fasta_chain in chain_id_map.items()}
       json.dump(chain_id_map_dict, f, indent=4, sort_keys=True)
 
-    all_chain_features = {}
-    sequence_features = {}
+    all_chain_features = {}     # zy: features of chains indexed by chain id.
+    sequence_features = {}      # zy: features of sequences indexed by 
+                                #     sequence string (to avoid duplicated 
+                                #     computation)
     is_homomer_or_monomer = len(set(input_seqs)) == 1
     for chain_id, fasta_chain in chain_id_map.items():
-      if fasta_chain.sequence in sequence_features:
+      if fasta_chain.sequence in sequence_features:   
+        # zy: search for results that are ready. If so, deep copy the result.
         all_chain_features[chain_id] = copy.deepcopy(
             sequence_features[fasta_chain.sequence])
         continue

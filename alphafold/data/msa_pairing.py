@@ -23,7 +23,7 @@ from typing import Any, Dict, Iterable, List, Sequence
 from alphafold.common import residue_constants
 from alphafold.data import pipeline
 import numpy as np
-import pandas as pd
+import pandas as pd  # zy: pandas used to handle msa data frames (df)
 import scipy.linalg
 
 ALPHA_ACCESSION_ID_MAP = {x: y for y, x in enumerate(string.ascii_uppercase)}
@@ -31,8 +31,8 @@ ALPHANUM_ACCESSION_ID_MAP = {
     chr: num for num, chr in enumerate(string.ascii_uppercase + string.digits)
 }  # A-Z,0-9
 NUM_ACCESSION_ID_MAP = {str(x): x for x in range(10)}                # 0-9
-
-MSA_GAP_IDX = residue_constants.restypes_with_x_and_gap.index('-')
+# zy: the ACCESSION_ID_MAP is in the form {'A': 0, ..., 'Z': 25, ...}
+MSA_GAP_IDX = residue_constants.restypes_with_x_and_gap.index('-')  # zy: :=21
 SEQUENCE_GAP_CUTOFF = 0.5
 SEQUENCE_SIMILARITY_CUTOFF = 0.9
 
@@ -162,7 +162,7 @@ def _create_species_dict(msa_df: pd.DataFrame) -> Dict[bytes, pd.DataFrame]:
   return species_lookup
 
 
-@functools.lru_cache(maxsize=65536)
+@functools.lru_cache(maxsize=65536)  # zy: to cache the outputs of the wrapped function.
 def encode_accession(accession_id: str) -> int:
   """Map accession codes to the serial order in which they were assigned."""
   alpha = ALPHA_ACCESSION_ID_MAP        # A-Z
