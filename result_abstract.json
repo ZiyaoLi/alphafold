@@ -1,0 +1,26 @@
+{
+    "distogram": {
+        "bin_edges": "shape=(63,); dtype=float32",
+        "logits": "shape=(234, 234, 64); dtype=float32"
+    },
+    "experimentally_resolved": {
+        "logits": "shape=(234, 37); dtype=float32"
+    },
+    "masked_msa": {
+        "logits": "shape=(252, 234, 22); dtype=float32"
+    },
+    "predicted_aligned_error": "shape=(234, 234); dtype=float32",
+    "predicted_lddt": {
+        "logits": "shape=(234, 50); dtype=float32"
+    },
+    "structure_module": {
+        "final_atom_mask": "shape=(234, 37); dtype=float32",
+        "final_atom_positions": "shape=(234, 37, 3); dtype=float32"
+    },
+    "plddt": "shape=(234,); dtype=float64",
+    "aligned_confidence_probs": "shape=(234, 234, 64); dtype=float32",
+    "max_predicted_aligned_error": "shape=(); dtype=float32",
+    "ptm": "shape=(); dtype=float64",
+    "iptm": "shape=(); dtype=float32",
+    "ranking_confidence": "shape=(); dtype=float64"
+}
