@@ -488,8 +488,8 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
   folding to produce a set of predicted residue positions.
 
   Args:
-    representations: Embeddings dictionary.
-    batch: Batch dictionary.
+    representations: Embeddings dictionary. zy: with keys 'single' and 'pair'.
+    batch: Batch dictionary. zy: with keys 'seq_mask' and 'aatype'
     config: config for the iterative fold head.
     global_config: global config.
     is_training: is training.
@@ -497,6 +497,7 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
 
   Returns:
     A dictionary containing residue Rigid's and sidechain positions.
+      zy: with keys ''
   """
   c = config
   sequence_mask = batch['seq_mask'][:, None]
