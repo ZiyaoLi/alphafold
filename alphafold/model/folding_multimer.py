@@ -186,7 +186,7 @@ class PointProjection(hk.Module):
 
 
 class InvariantPointAttention(hk.Module):
-  """Invariant point attention module.
+  """Covariant attention module.
 
   The high-level idea is that this attention module works over a set of points
   and associated orientations in 3D space (e.g. protein residues).
@@ -488,8 +488,8 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
   folding to produce a set of predicted residue positions.
 
   Args:
-    representations: Embeddings dictionary. zy: with keys 'single' and 'pair'.
-    batch: Batch dictionary. zy: with keys 'seq_mask' and 'aatype'
+    representations: Embeddings dictionary.
+    batch: Batch dictionary.
     config: config for the iterative fold head.
     global_config: global config.
     is_training: is training.
@@ -497,7 +497,6 @@ def generate_monomer_rigids(representations: Mapping[str, jnp.ndarray],
 
   Returns:
     A dictionary containing residue Rigid's and sidechain positions.
-      zy: with keys ''
   """
   c = config
   sequence_mask = batch['seq_mask'][:, None]
@@ -630,9 +629,10 @@ class StructureModule(hk.Module):
            batch: Mapping[str, Any]
            ) -> Dict[str, Any]:
 
-    raise NotImplementedError(
-        'This function should be called on a batch with reordered chains (see '
-        'Evans et al (2021) Section 7.3. Multi-Chain Permutation Alignment.')
+    # zy: cancelled NIE to test loss.
+    # raise NotImplementedError(
+    #     'This function should be called on a batch with reordered chains (see '
+    #     'Evans et al (2021) Section 7.3. Multi-Chain Permutation Alignment.')
 
     ret = {'loss': 0.}
 

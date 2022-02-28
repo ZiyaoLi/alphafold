@@ -353,7 +353,7 @@ CONFIG = ml_collections.ConfigDict({
             'deterministic': False,
             'multimer_mode': False,
             'subbatch_size': 4,
-            'use_remat': False,
+            'use_remat': True,
             'zero_init': True
         },
         'heads': {
@@ -580,7 +580,7 @@ CONFIG_MULTIMER = ml_collections.ConfigDict({
             'deterministic': False,
             'multimer_mode': True,
             'subbatch_size': 4,
-            'use_remat': False,
+            'use_remat': True,
             'zero_init': True
         },
         'heads': {
@@ -651,6 +651,8 @@ CONFIG_MULTIMER = ml_collections.ConfigDict({
             }
         },
         'num_ensemble_eval': 1,
+        'num_ensemble_train': 1,    # zy: added for training multimer.
+                                    #     used at alphafold/model/modules_multimer.py lineno 314
         'num_recycle': 3,
         'resample_msa_in_recycling': True
     }

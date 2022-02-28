@@ -16,13 +16,14 @@
 
 from typing import *
 from absl import logging
+import gzip
 import numpy as np
 import pickle
 import jax.numpy as jnp
 import jax.random as jrand
 from jax.experimental import optimizers as jopt
 from multiprocessing import Queue
-from alphafold import common
+from scipy import sparse as sp
 
 from alphafold.common.residue_constants import restype_order_with_x
 from alphafold.data.mmcif_parsing import MmcifObject
@@ -240,3 +241,31 @@ def load_params(model_path: str):
   else:
     raise ValueError(f"unknown type of params: {model_path}")
   return params
+
+
+def to_dense_matrix(spmat_dict: Dict[str, np.ndarray]):
+  # try:
+  spmat = sp.coo_matrix(
+      (spmat_dict['data'], (spmat_dict['row'], spmat_dict['col'])),
+      shape=spmat_dict['shape'], dtype=spmat_dict['data'].dtype)
+  # except:
+  #   raise ValueError(
+  #       f"Cannot convert dictionary {spmat_dict} to sparse matrix.")
+  return spmat.toarray()
+
+
+FEATS_DTYPE = {
+  'msa': np.int32
+}
+
+
+def uncompress_unifold_features(feats: FeatureDict) -> FeatureDict:
+  new_feats = {}
+  for k, v in feats.items():
+    if k.startswith('sparse_'):
+      new_feats[k[7:]] = to_dense_matrix(v)
+    elif k in FEATS_DTYPE:
+      new_feats[k] = v.astype(FEATS_DTYPE[k])
+    else:
+      new_feats[k] = v
+  return new_feats

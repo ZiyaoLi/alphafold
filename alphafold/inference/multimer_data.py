@@ -1,25 +1,24 @@
-'''converting old features.pkl to new features.pkl'''
+'''converting old features to new features'''
 
 from importlib.resources import path
 import os
 from absl import logging
 from Bio.PDB import PDBParser
 import copy
+import gzip
 import json
 import numpy as np
 import pathlib
 import pickle
 from typing import Dict, List, Mapping, Optional, Sequence
 
-from alphafold.common.protein import from_pdb_string
-from alphafold.common import residue_constants as rc
-from alphafold.data import feature_processing
-from alphafold.data.feature_processing import _is_homomer_or_monomer, pair_and_merge
+
+from alphafold.data.feature_processing import pair_and_merge
 from alphafold.data.mmcif_parsing import MmcifObject, parse as parse_mmcif_string
 from alphafold.data.parsers import parse_stockholm
 from alphafold.data.pipeline import FeatureDict, make_msa_features
-from alphafold.data.pipeline_multimer import add_assembly_features, convert_monomer_features
-from alphafold.train.utils import get_atom_positions
+from alphafold.data.pipeline_multimer import add_assembly_features, convert_monomer_features, pad_msa
+from alphafold.train.utils import get_atom_positions, uncompress_unifold_features
 
 NR = 256
 NM = 512
@@ -61,7 +60,7 @@ TEMPLATE_FEATS = {
 MULTIMER_CHAIN_FEATS = {**SEQ_FEATS, **MSA_FEATS, **TEMPLATE_FEATS}
 
 def convert_unifold_feats(feats: FeatureDict):
-  feats = {k: v for k, v in feats
+  feats = {k: v for k, v in feats.items()
            if k in MULTIMER_CHAIN_FEATS.keys()}
   num_align = feats['num_alignments'][0]    # get NM.
   if 'msa_uniprot_accession_identifiers' not in feats.keys():
@@ -72,9 +71,13 @@ def convert_unifold_feats(feats: FeatureDict):
         [''.encode('utf-8')] * num_align, dtype=np.object_)
   return feats
 
-def load_unifold_feats(unifold_feats_path: str):
-  with open(unifold_feats_path, 'rb') as fp:
+def load_unifold_feats(
+    unifold_feats_path: str,
+    gzipped: bool = False) -> FeatureDict:
+  open_fn = gzip.open if gzipped else open
+  with open_fn(unifold_feats_path, 'rb') as fp:
     feats = pickle.load(fp)
+  feats = uncompress_unifold_features(feats)
   feats = convert_unifold_feats(feats)
   return feats
 
@@ -97,6 +100,7 @@ def load_uniprot_feats(
                      f"is not supported.")
   all_seq_key = lambda k: f'{k}_all_seq' if not k.endswith('_all_seq') else k
   uniprot_feats = {all_seq_key(k): v for k, v in uniprot_feats.items()}
+  uniprot_feats.pop('num_alignments_all_seq')
   return uniprot_feats
 
 
@@ -104,8 +108,8 @@ class UFMPipeline:
   def __init__(
       self,
       multi_chain_map_path: str,
-      unifold_feats_dir: str,
-      uniprot_msa_dir: str,
+      unifold_feats_dir: str, # dir contains unifold feats e.g. dir/4xnv_A/features.pkl
+      uniprot_msa_dir: str,   # dir contains uniprot msas e.g. dir/4xnv_A/uniprot_hits.sto
       uniprot_msa_format: str = 'sto',
       max_uniprot_hits: int = 50000):
     with open(multi_chain_map_path, 'r') as fp:
@@ -165,7 +169,8 @@ class UFMPipeline:
   def process(
       self,
       input_mmcif_path: str,
-      dump_path: Optional[str] = None,) -> FeatureDict:
+      dump_path: Optional[str] = None,
+      is_prokaryote: bool = False) -> FeatureDict:
     # auto detect pdb_id from mmcif path.
     pdb_id = pathlib.Path(input_mmcif_path).stem
     # load mmcif object.
@@ -203,7 +208,8 @@ class UFMPipeline:
           short_chain_id=cid, mmcif_object=mmcif_obj)
       
       # check for conflicts in chain sequences between feats and labs.
-      assert chain_feats['sequence'] == seq, \
+      feats_seq = str(chain_feats['sequence'][0], encoding='utf-8')
+      assert feats_seq == seq, \
           f"sequence conflicts detected for {chain_id} (canonical id " \
           f"{canon_chain_id}). sequence in mmcif: {seq}; sequence in " \
           f"unifold features: {chain_feats['sequence']}."
@@ -217,16 +223,15 @@ class UFMPipeline:
       seen_chain_feats[canon_chain_id] = chain_feats
     
     all_chain_feats = add_assembly_features(all_chain_feats)
-    np_example = pair_and_merge(all_chain_feats)
+    np_example = pair_and_merge(all_chain_feats, is_prokaryote=is_prokaryote)
+    np_example = pad_msa(np_example, 512)
+
     if dump_path is not None:
       try:
-        with open(dump_path, 'wb'):
+        with open(dump_path, 'wb') as fp:
           pickle.dump(np_example, fp)
       except:
         logging.warning(f"dumping multimer features to {dump_path} failed.")
     
     return np_example
-
-
-
 

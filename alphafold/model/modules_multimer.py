@@ -32,7 +32,7 @@ from alphafold.model import layer_stack
 from alphafold.model import modules
 from alphafold.model import prng
 from alphafold.model import utils
-
+from tools.pickle_abstract import get_abstract
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -307,6 +307,7 @@ class AlphaFoldIteration(hk.Module):
   def __call__(self,
                batch,
                is_training,
+               compute_loss,
                return_representations=False,
                safe_key=None):
 
@@ -343,9 +344,13 @@ class AlphaFoldIteration(hk.Module):
 
     (representations, _), _ = hk.scan(
         ensemble_body, (representations, safe_key), None, length=num_ensemble)
-
+    
     self.representations = representations
     self.batch = batch
+    # zy: record bert mask and true msa to compute bert loss.
+    batch['true_msa'] = representations['true_msa']
+    batch['bert_mask'] = representations['bert_mask']
+    
     self.heads = {}
     for head_name, head_config in sorted(self.config.heads.items()):
       if not head_config.weight:
@@ -367,14 +372,26 @@ class AlphaFoldIteration(hk.Module):
       }[head_name]
       self.heads[head_name] = (head_config,
                                head_factory(head_config, self.global_config))
-
+    
     structure_module_output = None
     if 'entity_id' in batch and 'all_atom_positions' in batch:
       _, fold_module = self.heads['structure_module']
-      structure_module_output = fold_module(representations, batch, is_training)
+      structure_module_output = fold_module(
+          representations, batch, is_training, compute_loss=compute_loss)
 
+    total_loss = 0.0
     ret = {}
     ret['representations'] = representations
+
+    def loss(module, head_config, ret, name, filter_ret=True):
+      if filter_ret:
+        value = ret[name]
+      else:
+        value = ret
+      loss_output = module.loss(value, batch)
+      ret[name].update(loss_output)
+      loss = head_config.weight * ret[name]['loss']
+      return loss
 
     for name, (head_config, module) in self.heads.items():
       if name == 'structure_module' and structure_module_output is not None:
@@ -386,25 +403,35 @@ class AlphaFoldIteration(hk.Module):
         continue
       else:
         ret[name] = module(representations, batch, is_training)
+      if compute_loss:
+        total_loss += loss(module, head_config, ret, name)
 
     # Add confidence heads after StructureModule is executed.
     if self.config.heads.get('predicted_lddt.weight', 0.0):
       name = 'predicted_lddt'
       head_config, module = self.heads[name]
       ret[name] = module(representations, batch, is_training)
+      if compute_loss:
+        total_loss += loss(module, head_config, ret, name, filter_ret=False)
 
     if self.config.heads.experimentally_resolved.weight:
       name = 'experimentally_resolved'
       head_config, module = self.heads[name]
       ret[name] = module(representations, batch, is_training)
+      print(ret[name])
+      if compute_loss:
+        total_loss += loss(module, head_config, ret, name)
 
-    if self.config.heads.get('predicted_aligned_error.weight', 0.0):
-      name = 'predicted_aligned_error'
-      head_config, module = self.heads[name]
-      ret[name] = module(representations, batch, is_training)
-      # Will be used for ipTM computation.
-      ret[name]['asym_id'] = batch['asym_id']
+    # if self.config.heads.get('predicted_aligned_error.weight', 0.0):
+    #   name = 'predicted_aligned_error'
+    #   head_config, module = self.heads[name]
+    #   ret[name] = module(representations, batch, is_training)
+    #   # Will be used for ipTM computation.
+    #   ret[name]['asym_id'] = batch['asym_id']
+    #   if compute_loss:
+    #     total_loss += loss(module, head_config, ret, name, filter_ret=False)
 
+    ret['total_loss'] = total_loss
     return ret
 
 
@@ -421,6 +448,7 @@ class AlphaFold(hk.Module):
       self,
       batch,
       is_training,
+      compute_loss=False,
       return_representations=False,
       safe_key=None):
 
@@ -449,6 +477,7 @@ class AlphaFold(hk.Module):
       return impl(
           batch=recycled_batch,
           is_training=is_training,
+          compute_loss=compute_loss,
           safe_key=safe_key)
 
     if self.config.num_recycle:
@@ -464,7 +493,6 @@ class AlphaFold(hk.Module):
 
       if 'num_iter_recycling' in batch:
         # Training time: num_iter_recycling is in batch.
-        # zy: seemingly this should be manually added to the batch.
         # Value for each ensemble batch is the same, so arbitrarily taking 0-th.
         num_iter = batch['num_iter_recycling'][0]
 
@@ -484,7 +512,6 @@ class AlphaFold(hk.Module):
 
       prev, safe_key = hk.fori_loop(0, num_iter, recycle_body, (prev, safe_key))
     else:
-      # zy: recycle is not used at all
       prev = {}
 
     # Run extra iteration.
@@ -774,6 +801,10 @@ class EmbeddingsAndEvoformer(hk.Module):
             msa_activations[:num_msa_sequences, :, :],
         'msa_first_row':
             msa_activations[0],
+        'true_msa':
+            batch['true_msa'],
+        'bert_mask':
+            batch['bert_mask']
     })
 
     return output

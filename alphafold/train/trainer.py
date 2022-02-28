@@ -62,6 +62,7 @@ class Trainer:
       return model(
           batch,
           is_training=True,
+          compute_loss=True,
           return_representations=True)
 
     self._init_fn = jax.jit(hk.transform(_forward_fn).init)
@@ -142,7 +143,7 @@ class Trainer:
       # _, loss = self._apply_fn(params=params, batch=batch, rng=rng)
       ret = self._apply_fn(params=params, batch=batch, rng=rng)
       print(ret.keys())
-      loss = ret['loss']
+      loss = ret['total_loss']
       # zy: the shape if all_atom_mask was changed to 2D.
       # seq_length_weight = jnp.sqrt(jnp.sum(batch['all_atom_mask'][0,:,0]))
       seq_length_weight = jnp.sqrt(jnp.sum(batch['all_atom_mask'][:,0]))

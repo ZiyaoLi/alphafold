@@ -790,7 +790,7 @@ def frame_aligned_point_error(
     pair_mask: jnp.ndarray,  # shape (num_frames, num_posiitons)
     l1_clamp_distance: float,
     length_scale=20.,
-    epsilon=1e-4) -> jnp.ndarray:  # shape ()
+    epsilon=1e-4, **kwargs) -> jnp.ndarray:  # shape ()
   """Measure point error under different alignements.
 
   Computes error between two structures with B points

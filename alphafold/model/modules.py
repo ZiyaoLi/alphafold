@@ -17,6 +17,7 @@
 The structure generation code is in 'folding.py'.
 """
 import functools
+from webbrowser import get
 from alphafold.common import residue_constants
 from alphafold.model import all_atom
 from alphafold.model import common_modules
@@ -30,6 +31,9 @@ from alphafold.model import utils
 import haiku as hk
 import jax
 import jax.numpy as jnp
+
+# zy import
+from alphafold.model.all_atom_multimer import get_atom37_mask
 
 
 def softmax_cross_entropy(logits, labels):
@@ -1234,7 +1238,10 @@ class ExperimentallyResolvedHead(hk.Module):
     assert len(logits.shape) == 2
 
     # Does the atom appear in the amino acid?
-    atom_exists = batch['atom37_atom_exists']
+    if 'atom37_atom_exists' in batch:
+      atom_exists = batch['atom37_atom_exists']
+    else:
+      atom_exists = get_atom37_mask(batch['aatype'])
     # Is the atom resolved in the experiment? Subset of atom_exists,
     # *except for OXT*
     all_atom_mask = batch['all_atom_mask'].astype(jnp.float32)
@@ -1388,8 +1395,20 @@ def _distogram_log_loss(logits, bin_edges, batch, num_bins):
   """Log loss of a distogram."""
 
   assert len(logits.shape) == 3
-  positions = batch['pseudo_beta']
-  mask = batch['pseudo_beta_mask']
+  # original pseudo mask
+  # positions = batch['pseudo_beta']
+  # mask = batch['pseudo_beta_mask']
+  try:
+    positions = batch['pseudo_beta']
+    mask = batch['pseudo_beta_mask']
+  except KeyError:
+    positions, mask = pseudo_beta_fn(
+      aatype=batch['aatype'],
+      all_atom_positions=batch['all_atom_positions'],
+      all_atom_masks=batch['all_atom_mask']
+    )
+    batch['pseudo_beta'] = positions
+    batch['pseudo_beta_mask'] = mask
 
   assert positions.shape[-1] == 3
 
