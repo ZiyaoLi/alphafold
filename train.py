@@ -90,7 +90,7 @@ def train(train_config):
   logging.info("initializing ...")
   # _, init_batch = get_queue_item(train_queue)    # do NOT use the returned rng to initialize trainer.
   import pickle
-  batch = pickle.load(open('./example_data/features/4xnw/features.pkl', 'rb'))
+  batch = pickle.load(open('./local_data/features/4xnw/features.pkl', 'rb'))
   batch = crop_and_pad_multimer(batch, 128, 181129)
   batch['resolution'] = 2
   import jax.random as jrand
