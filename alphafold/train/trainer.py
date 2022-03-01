@@ -16,6 +16,7 @@
 
 # major imports
 from absl import logging
+from alphafold.train.utils import collect_loss
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -168,14 +169,17 @@ class Trainer:
     
     # define update_fn.  
     def _update_fn(step, opt_state, batch, rng):
-      loss, grads = jax.value_and_grad(_loss_fn)(
-          self.optimizer.get_params(opt_state), batch, rng)
+      params = self.optimizer.get_params(opt_state)
+      ret = self._apply_fn(params=params, batch=batch, rng=rng)
+      loss_dict = collect_loss(ret)
+      loss, grads = jax.value_and_grad(_loss_fn)(params, batch, rng)
       grads = self.optimizer.clip_grads(grads)
       if self.gc.use_mpi:
         loss = _mpi_reduce_value(loss)
         grads = _mpi_reduce_tree(grads)
+        loss_dict = _mpi_reduce_tree(loss_dict)
       opt_state = self.optimizer.opt_update(step, grads, opt_state)
-      return opt_state, loss
+      return opt_state, loss_dict
     
     # define eval_fn for validation.
     # def _eval_fn(params, batch, rng):
@@ -226,27 +230,39 @@ class Trainer:
 
   def update(self, step, batch, rng):
     # wrapped update_fn for external calls.
-    opt_state, loss = self._update_fn(step, self.optim_state, batch, rng)
+    opt_state, loss_dict = self._update_fn(step, self.optim_state, batch, rng)
     self.optim_state = opt_state
-    return loss
+    return loss_dict
 
 
-  def _logging(self, step, loss):
-    # print and record training stats at the step.
-    toc = time.time()
-    step_time = (toc - self._tic) / (
-        1 if step == 0 else self.gc.logging_freq)
-    self.train_losses.append((step, loss, step_time))
-    logging.info(f"step: {step:05d}\ttrain_loss: {loss:3.4f}\tstep_time: {step_time:.2f}s")
-    self._tic = time.time()
+  def _logging(self,
+      step: int,
+      loss_dict: dict,
+      is_training: bool = True,
+      step_time: Optional[float] = None):
+    # print and record stats at the step.
+    loss_msg = '\n'.join(
+        [f"--------\t{k}: {v}" for k, v in loss_dict.items()])
+    if is_training:
+      toc = time.time()
+      step_time = (toc - self._tic) / (
+          1 if step == 0 else self.gc.logging_freq)
+      self.train_losses.append([step, step_time] + list(loss_dict.values()))
+      logging.info(f"train_step: {step:05d}\tstep_time: {step_time:.2f}s\t"
+                   f"detailed_losses: \n{loss_msg}\n")
+      self._tic = time.time()
+    else:
+      self.eval_losses.append([step, step_time] + list(loss_dict.value()))
+      logging.info(f"eval_step: {step:05d}\tstep_time: {step_time:.2f}s\t"
+                   f"detailed_losses: \n{loss_msg}\n")
 
 
   def train_step(self, step, batch, rng, silent=True):
     # batch = cast_to_precision(batch, self.precision)
-    loss = self.update(step, batch, rng)
+    loss_dict = self.update(step, batch, rng)
     if not silent:
       if self.is_logging_step(step):
-        self._logging(step, loss)
+        self._logging(step, loss_dict, is_training=True)
       if self.is_save_step(step):
         self.autosave(step)
 
@@ -255,11 +271,10 @@ class Trainer:
     # evaluation on the fly
     tmp_tic = time.time()
     # loss = self._eval_fn(self.params, batch, rng)
-    _, loss = self._update_fn(step, self.optim_state, batch, rng)
+    _, loss_dict = self._update_fn(step, self.optim_state, batch, rng)
     eval_time = time.time() - tmp_tic
     if not silent:
-      self.eval_losses.append((step, loss, eval_time))
-      logging.info(f"step: {step:05d}\teval_loss:  {loss:3.4f}\teval_time: {eval_time:.2f}s")
+      self._logging(step, loss_dict, is_training=False, step_time=eval_time)
 
 
 

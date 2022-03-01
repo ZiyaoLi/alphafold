@@ -269,3 +269,27 @@ def uncompress_unifold_features(feats: FeatureDict) -> FeatureDict:
     else:
       new_feats[k] = v
   return new_feats
+
+
+def collect_loss(return_value: dict) -> dict:
+  head_names = [
+      'masked_msa',
+      'distogram',
+      'structure_module',
+      'predicted_aligned_error',
+      'predicted_lddt',
+      'experimentally_resolved'
+  ]
+
+  def get_head_loss(head_name):
+    try:
+      return return_value[head_name]['loss']
+    except KeyError:
+      return None
+  
+  losses = {k: get_head_loss(k) for k in head_names}
+  losses['total_loss'] = return_value['total_loss']
+
+  return losses
+  
+
