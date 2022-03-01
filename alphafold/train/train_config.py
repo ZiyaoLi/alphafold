@@ -46,10 +46,10 @@ train_config = ConfigDict({
         # Frequency of saving ckpts.
         'save_freq': 50,
         # Directory to save ckpts. used for auto-saving ckpts.
-        'save_dir': './out/ckpt',
+        'save_dir': './local_out/ckpt',
         # Directory to load ckpts. used for auto-loading ckpts.
         # ignored if start_step == 0.
-        'load_dir': './out/ckpt',
+        'load_dir': './local_out/ckpt',
         # Training precision, generally in ['fp32', 'bf16'].
         # Set for mixed precision training.
         'precision': 'fp32',
